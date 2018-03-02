@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	padLeft = "  "
+	pad2 = "  "
 )
 
 func bye(msg string, code int) {

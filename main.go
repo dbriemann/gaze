@@ -67,7 +67,7 @@ func main() {
 		bye(fmt.Sprintf("Error mounting working directory: %s", err.Error()), 1)
 	}
 
-	loop := cmdLoop{}
+	processor := newProcessor()
 
-	loop.run()
+	processor.run()
 }
