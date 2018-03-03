@@ -8,45 +8,55 @@ import (
 	"strings"
 )
 
-type Processor struct {
+type processor struct {
 	reader   *bufio.Reader
 	commands []command
 }
 
-func newProcessor() *Processor {
-	p := Processor{}
+func newProcessor() *processor {
+	p := processor{}
 	p.reader = bufio.NewReader(os.Stdin)
 	p.commands = []command{
 		command{
 			long:  "help",
 			short: "h",
 			desc:  "shows the settings and lists all commands",
-			fun:   help,
+			fun:   cmdHelp,
+		},
+		command{
+			long:  "quit",
+			short: "q",
+			desc:  "quits gaze",
+			fun:   cmdQuit,
+		},
+		command{
+			long:  "setauth",
+			short: "sa",
+			desc:  "queries the user for his auth data and saves it",
+			fun:   cmdSetAuth,
 		},
 	}
 
 	return &p
 }
 
-func (p *Processor) prompt() []string {
+func (p *processor) prompt() []string {
 	fmt.Print(pad2 + "< ")
 	line, err := p.reader.ReadString('\n')
 	if err != nil {
 		if err == io.EOF {
-			bye("^D\n"+pad2+"> See you soon.", 0)
+			fmt.Println("^D\n")
+			cmdQuit(p, nil)
 		}
-		bye(fmt.Sprintf("Something bad happened (%s)\n", err.Error()), 1)
+		bye(fmt.Sprintf(pad2+"> something bad happened (%s)\n", err.Error()), 1)
 	}
+	fmt.Println("")
 
 	line = strings.TrimSpace(line)
-	if line == "quit" || line == "exit" {
-		bye(pad2+"> See you soon.", 0)
-	}
-
 	return strings.Fields(line)
 }
 
-func (p *Processor) run() {
+func (p *processor) run() {
 	for {
 		line := p.prompt()
 		if len(line) > 0 {
@@ -58,7 +68,7 @@ func (p *Processor) run() {
 			}
 			fmt.Println(pad2 + "> command unkown")
 			fmt.Println("")
-			help(p, line[1:])
+			cmdHelp(p, line[1:])
 		COMMAND_EXECUTED:
 			fmt.Println("")
 		}
