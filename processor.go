@@ -6,17 +6,19 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/kr/pretty"
 )
 
 type processor struct {
 	reader   *bufio.Reader
 	commands []command
-	client   TVDBClient
+	client   tvdbClient
 }
 
 func newProcessor() *processor {
 	p := processor{}
-	p.client = TVDBClient{}
+	p.client = tvdbClient{}
 	p.reader = bufio.NewReader(os.Stdin)
 	p.commands = []command{
 		command{
@@ -24,6 +26,12 @@ func newProcessor() *processor {
 			short: "h",
 			desc:  "shows the settings and lists all commands",
 			fun:   cmdHelp,
+		},
+		command{
+			long:  "import",
+			short: "i",
+			desc:  "imports all favorites from thetvdb.com",
+			fun:   cmdImport,
 		},
 		command{
 			long:  "quit",
@@ -70,7 +78,11 @@ func (p *processor) run() {
 		if len(line) > 0 {
 			for _, cmd := range p.commands {
 				if line[0] == cmd.long || line[0] == cmd.short {
-					cmd.fun(p, line[1:]) // TODO err
+					err := cmd.fun(p, line[1:])
+					if err != nil {
+						pretty.Println(err.Error())
+						//TODO ???
+					}
 					goto COMMAND_EXECUTED
 				}
 			}

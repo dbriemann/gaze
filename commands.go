@@ -22,6 +22,11 @@ func cmdHelp(p *processor, args []string) error {
 	return nil
 }
 
+func cmdImport(p *processor, args []string) error {
+	err := p.client.importFavs()
+	return err
+}
+
 func cmdQuit(p *processor, args []string) error {
 	bye(pad2+"> See you soon.", 0)
 	return nil
