@@ -14,12 +14,6 @@ type command struct {
 
 func cmdHelp(p *processor, args []string) error {
 	// TODO settings status
-	cmdList(p, nil)
-
-	return nil
-}
-
-func cmdList(p *processor, args []string) error {
 	fmt.Printf("%s> %-10s | %-5s | %s\n", pad2, "command", "short", "description")
 	fmt.Println(pad2 + "----------------------------------------------------------------------")
 	for _, cmd := range p.commands {
@@ -34,7 +28,7 @@ func cmdQuit(p *processor, args []string) error {
 }
 
 func cmdSetAuth(p *processor, args []string) error {
-	fmt.Printf("%s> specify your 'thetvdb.com' data\n", pad2)
+	fmt.Printf("\n%s> specify your 'thetvdb.com' data\n\n", pad2)
 START_OVER:
 	if configData.Auth.UserName == "" {
 		fmt.Printf("%s> enter your user name\n", pad2)
@@ -91,6 +85,8 @@ ASK_AGAIN:
 		} else {
 			goto ASK_AGAIN
 		}
+	} else {
+		goto ASK_AGAIN
 	}
 
 	return nil

@@ -7,14 +7,17 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
-	configFile = "auth.json"
+	configFile = "config.json"
 )
 
 type config struct {
-	Auth auth `json:"auth"`
+	Auth     auth      `json:"auth"`
+	Token    string    `json:"token"`
+	LastAuth time.Time `json:"lastauth"`
 }
 
 type auth struct {
@@ -40,6 +43,16 @@ func (c *config) save() {
 	if err != nil {
 		bye(fmt.Sprintf(pad2+"> could not save auth file: %s\n", err.Error()), 1)
 	}
+}
+
+func (c *config) hasAuthData() bool {
+	if c.Auth.ApiKey == "" ||
+		c.Auth.UserKey == "" ||
+		c.Auth.UserName == "" {
+		return false
+	}
+
+	return true
 }
 
 func mountDataDir(path string) error {
