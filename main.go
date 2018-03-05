@@ -29,10 +29,12 @@ func main() {
 		bye(helpStr, 0)
 	}
 
+	// Setup working data.
 	if err := mountDataDir(*path); err != nil {
 		bye(fmt.Sprintf("Error mounting working directory: %s", err.Error()), 1)
 	}
 	loadConfig()
+	db = OpenDB()
 
 	processor := newProcessor()
 

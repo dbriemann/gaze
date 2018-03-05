@@ -12,6 +12,7 @@ import (
 
 const (
 	configFile = "config.json"
+	dbFile     = "database.json"
 )
 
 type config struct {
@@ -34,14 +35,14 @@ var (
 func (c *config) save() {
 	b, err := json.MarshalIndent(*c, "", "\t")
 	if err != nil {
-		bye(fmt.Sprintf(pad2+"> could not create auth file: %s\n", err.Error()), 1)
+		bye(fmt.Sprintf(pad2+"> could not create config file: %s\n", err.Error()), 1)
 	}
 
 	path := filepath.Join(workDir, configFile)
 
 	err = ioutil.WriteFile(path, b, 0600)
 	if err != nil {
-		bye(fmt.Sprintf(pad2+"> could not save auth file: %s\n", err.Error()), 1)
+		bye(fmt.Sprintf(pad2+"> could not save config file: %s\n", err.Error()), 1)
 	}
 }
 
@@ -69,12 +70,12 @@ func mountDataDir(path string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(pad2+"> Created working directory at", abs)
+		fmt.Println(pad2+"> created working directory at", abs)
 		workDir = abs
 	} else {
 		// Test if it is a directory.
 		if !finfo.IsDir() {
-			return errors.New(abs + " expected directory but got file")
+			return errors.New(abs + " " + ErrFileNotDir.Error())
 		}
 		workDir = abs
 	}
@@ -110,6 +111,6 @@ func loadConfig() {
 			bye(fmt.Sprintf(pad2+"> could not read file %s with error: %s", fpath, err.Error()), 1)
 		}
 	} else {
-		bye(pad2+"> %s is a directory but should be a file", 1)
+		bye(pad2+"> "+fpath+" "+ErrDirNotFile.Error(), 1)
 	}
 }

@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
-	"github.com/kr/pretty"
 	"github.com/parnurzeal/gorequest"
 )
 
@@ -14,58 +15,59 @@ const (
 	APIURI = "https://api.thetvdb.com"
 )
 
-type db struct {
-	Shows       map[uint64]show `json:"shows"`
-	LastUpdated uint64          `json:"lastUpdated"`
-}
-
-type show struct {
-	ID          uint64    `json:"id"`
-	Name        string    `json:"seriesName"`
-	Status      string    `json:"status"`
-	Network     string    `json:"network"`
-	FirstAired  string    `json:"firstAired"`
-	Runtime     uint32    `json:"runtime,string"`
-	Overview    string    `json:"overview"`
-	LastUpdated uint64    `json:"lastUpdated"`
-	AirDay      string    `json:"airsDayOfWeek"`
-	AirTime     string    `json:"airsTime"`
-	Rating      float32   `json:"siteRating"`
-	RatingCount uint32    `json:"siteRatingCount"`
-	Episodes    []episode `json:"episodes"`
-}
-
-type episode struct {
-	ID          uint64 `json:"id"`
-	Name        string `json:"episodeName"`
-	Number      uint32 `json:"airedEpisodeNumber"`
-	Season      uint32 `json:"airedSeason"`
-	FirstAired  string `json:"firstAired"`
-	LastUpdated uint64 `json:"lastUpdated"`
-	Overview    string `json:"overview"`
-
-	Watched bool `json:"watched"`
+type pagedData struct {
 }
 
 type tvdbClient struct {
-	data db
+}
+
+func tvdbFetchShow(id uint64) (Show, error) {
+	s := Show{}
+	fmt.Printf("%s> fetching show data from tvdb.com..", pad2)
+	resp, body, errs := gorequest.New().Get(APIURI+fmt.Sprintf("/series/%d", id)).Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
+	if errs != nil {
+		fmt.Println(" failed\n")
+		return s, errs[0]
+	}
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println(" failed\n")
+		return s, errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
+	}
+
+	var incoming struct {
+		Data Show `json:"data"`
+	}
+
+	err := json.Unmarshal([]byte(body), &incoming)
+	if err != nil {
+		fmt.Println(" failed\n")
+		return s, err
+	}
+
+	// TODO fetch episodes
+	fmt.Println(" success\n")
+	return incoming.Data, nil
 }
 
 func (c *tvdbClient) importFavs() error {
 	fmt.Printf("%s> importing favorites from thetvdb.com..", pad2)
-	_, body, errs := gorequest.New().Get(APIURI+"/user/favorites").Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
+	resp, body, errs := gorequest.New().Get(APIURI+"/user/favorites").Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
 	if errs != nil {
 		fmt.Println(" failed\n")
 		return errs[0]
 	}
-
-	pretty.Println(body)
-
-	var d struct {
-		favs []show `json:"favorites"`
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println(" failed\n")
+		return errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
 	}
 
-	err := json.Unmarshal([]byte(body), &d)
+	var incoming struct {
+		Data struct {
+			Favs []json.Number `json:"favorites"`
+		} `json:"data"`
+	}
+
+	err := json.Unmarshal([]byte(body), &incoming)
 	if err != nil {
 		fmt.Println(" failed\n")
 		return err
@@ -73,9 +75,23 @@ func (c *tvdbClient) importFavs() error {
 
 	fmt.Println(" success\n")
 
-	pretty.Println(d.favs)
-
-	// TODO - continue here
+	// Add shows to database if they do not exist yet
+	newShows := 0
+	fmt.Printf("%s> merging favorite shows into database..\n", pad2)
+	for _, strid := range incoming.Data.Favs {
+		iid, err := strid.Int64()
+		if err != nil {
+			fmt.Printf("%s> skipping show with ID %s because of error '%s'. ", pad2, strid, err.Error())
+			continue
+		}
+		id := uint64(iid)
+		if err := db.addShowByID(id); err != nil {
+			fmt.Printf("%s> skipping show with ID %s because of error '%s'. ", pad2, strid, err.Error())
+			continue
+		}
+		newShows++
+	}
+	fmt.Printf("%s> added %d shows to database\n", pad2, newShows)
 
 	return nil
 }
@@ -124,10 +140,14 @@ func (c *tvdbClient) login() error {
 		return err
 	}
 	fmt.Printf("%s> logging in to thetvdb.com..", pad2)
-	_, body, errs := gorequest.New().Post(APIURI + "/login").Send(string(payload)).End()
+	resp, body, errs := gorequest.New().Post(APIURI + "/login").Send(string(payload)).End()
 	if errs != nil {
 		fmt.Println(" failed\n")
 		return errs[0]
+	}
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println(" failed\n")
+		return errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
 	}
 
 	// Update token and time.
