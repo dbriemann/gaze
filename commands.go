@@ -23,7 +23,7 @@ func cmdHelp(p *processor, args []string) error {
 }
 
 func cmdImport(p *processor, args []string) error {
-	err := p.client.importFavs()
+	err := tvdbImportFavs()
 	return err
 }
 

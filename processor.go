@@ -13,12 +13,10 @@ import (
 type processor struct {
 	reader   *bufio.Reader
 	commands []command
-	client   tvdbClient
 }
 
 func newProcessor() *processor {
 	p := processor{}
-	p.client = tvdbClient{}
 	p.reader = bufio.NewReader(os.Stdin)
 	p.commands = []command{
 		command{
@@ -71,7 +69,7 @@ func (p *processor) run() {
 		cmdSetAuth(p, nil)
 	}
 	for {
-		if err := p.client.ensureLogin(); err != nil {
+		if err := tvdbEnsureLogin(); err != nil {
 			bye(fmt.Sprintf(pad2+"> something bad happened (%s)\n", err.Error()), 1)
 		}
 		line := p.prompt()

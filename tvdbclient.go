@@ -18,12 +18,9 @@ const (
 type pagedData struct {
 }
 
-type tvdbClient struct {
-}
-
 func tvdbFetchShow(id uint64) (Show, error) {
 	s := Show{}
-	fmt.Printf("%s> fetching show data from tvdb.com..", pad2)
+	fmt.Printf("%s> importing show..", pad2)
 	resp, body, errs := gorequest.New().Get(APIURI+fmt.Sprintf("/series/%d", id)).Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
 	if errs != nil {
 		fmt.Println(" failed\n")
@@ -45,11 +42,55 @@ func tvdbFetchShow(id uint64) (Show, error) {
 	}
 
 	// TODO fetch episodes
-	fmt.Println(" success\n")
+	fmt.Printf(" '%s' (id: %d)\n", incoming.Data.Name, incoming.Data.ID)
 	return incoming.Data, nil
 }
 
-func (c *tvdbClient) importFavs() error {
+func tvdbFetchEpisodes(s *Show) ([]episode, error) {
+	eps := []episode{}
+
+	var incoming struct {
+		Links struct {
+			First int `json:"first"`
+			Last  int `json:"last"`
+			//			Next  *int `json:"next"`
+			//			Prev  *int `json:"prev"`
+		} `json:"links"`
+		Data []episode `json:"data"`
+	}
+
+	fmt.Printf("%s> importing episodes for show '%s'", pad2, s.Name)
+	for page := 1; ; page++ {
+		fmt.Print(".")
+		resp, body, errs := gorequest.New().Get(APIURI+fmt.Sprintf("/series/%d/episodes?page=%d", s.ID, page)).Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
+		if errs != nil {
+			fmt.Println(" failed\n")
+			return nil, errs[0]
+		}
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println(" failed\n")
+			return nil, errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
+		}
+
+		err := json.Unmarshal([]byte(body), &incoming)
+		if err != nil {
+			fmt.Println(" failed\n")
+			return nil, err
+		}
+
+		eps = append(eps, incoming.Data...)
+
+		if page >= incoming.Links.Last {
+			break
+		}
+	}
+
+	fmt.Println(" success")
+
+	return eps, nil
+}
+
+func tvdbImportFavs() error {
 	fmt.Printf("%s> importing favorites from thetvdb.com..", pad2)
 	resp, body, errs := gorequest.New().Get(APIURI+"/user/favorites").Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
 	if errs != nil {
@@ -73,11 +114,11 @@ func (c *tvdbClient) importFavs() error {
 		return err
 	}
 
-	fmt.Println(" success\n")
+	fmt.Println("")
 
 	// Add shows to database if they do not exist yet
 	newShows := 0
-	fmt.Printf("%s> merging favorite shows into database..\n", pad2)
+	fmt.Printf("%s> querying all favorite shows..\n", pad2)
 	for _, strid := range incoming.Data.Favs {
 		iid, err := strid.Int64()
 		if err != nil {
@@ -91,41 +132,51 @@ func (c *tvdbClient) importFavs() error {
 		}
 		newShows++
 	}
-	fmt.Printf("%s> added %d shows to database\n", pad2, newShows)
+	fmt.Printf("%s> added %d shows to database\n\n", pad2, newShows)
 
+	return tvdbUpdateAll()
+}
+
+func tvdbUpdateAll() error {
+	// TODO test updates
+	fmt.Printf("%s> updating all shows..", pad2)
+	for _, show := range db.Shows {
+		db.addEpisodesForShow(show)
+	}
+	db.save()
 	return nil
 }
 
-func (c *tvdbClient) ensureLogin() error {
+func tvdbEnsureLogin() error {
 	age := time.Now().Sub(configData.LastAuth)
 	if configData.Token != "" && age < time.Hour*24 {
 		// An active token exists so we don't need to login.
 
 		if age > 1*time.Hour {
 			// Refresh token if older than 1 hour.
-			return c.refresh()
+			return tvdbRefresh()
 		}
 
 		return nil
 	}
 
 	// No token exists yet or it has expired -> login.
-	return c.login()
+	return tvdbLogin()
 }
 
-func (c *tvdbClient) refresh() error {
+func tvdbRefresh() error {
 	fmt.Printf("%s> refreshing thetvdb.com token..", pad2)
 	resp, body, errs := gorequest.New().Get(APIURI+"/refresh_token").Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
 	if errs != nil || resp.StatusCode != http.StatusOK {
 		// If refreshing failed, try logging in.
 		fmt.Println(" timed out\n")
-		return c.login()
+		return tvdbLogin()
 	}
 
 	// Update token and time.
 	if err := json.Unmarshal([]byte(body), &configData); err != nil {
 		fmt.Println(" failed\n")
-		return c.login()
+		return tvdbLogin()
 	}
 
 	configData.LastAuth = time.Now()
@@ -134,7 +185,7 @@ func (c *tvdbClient) refresh() error {
 	return nil
 }
 
-func (c *tvdbClient) login() error {
+func tvdbLogin() error {
 	payload, err := json.Marshal(configData.Auth)
 	if err != nil {
 		return err

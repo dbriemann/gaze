@@ -14,16 +14,16 @@ var (
 )
 
 type database struct {
-	Shows       map[uint64]Show    `json:"shows"`
-	Episodes    map[uint64]episode `json:"episodes"`
-	LastUpdated uint64             `json:"lastUpdated"`
-	Version     uint32             `json:"version"`
+	Shows       map[uint64]*Show    `json:"shows"`
+	Episodes    map[uint64]*episode `json:"episodes"`
+	LastUpdated uint64              `json:"lastUpdated"`
+	Version     uint32              `json:"version"`
 }
 
 func OpenDB() *database {
 	db := &database{
-		Shows:       map[uint64]Show{},
-		Episodes:    map[uint64]episode{},
+		Shows:       map[uint64]*Show{},
+		Episodes:    map[uint64]*episode{},
 		LastUpdated: uint64(time.Now().Unix()),
 	}
 	fpath := filepath.Join(workDir, dbFile)
@@ -35,6 +35,7 @@ func OpenDB() *database {
 			// If not create a dummy.
 			db.save()
 			fmt.Println(pad2+"> created database file at", fpath)
+			fmt.Println()
 		} else {
 			// Strange error -> exit.
 			bye(fmt.Sprintf("could not open database: %s", err.Error()), 1)
@@ -65,19 +66,29 @@ func (db *database) save() {
 }
 
 func (db *database) addShowByID(id uint64) error {
-	//	s := show{
-	//		ID:          id,
-	//		LastUpdated: 0,
-	//	}
-
 	// Query thetvdb.com for show data
 	s, err := tvdbFetchShow(id)
-
 	if err != nil {
 		return err
 	}
 
-	db.Shows[s.ID] = s
+	db.Shows[s.ID] = &s
+	db.save()
+
+	return nil
+}
+
+func (db *database) addEpisodesForShow(s *Show) error {
+	eps, err := tvdbFetchEpisodes(s)
+	if err != nil {
+		return err
+	}
+
+	s.EpisodeIDs = []uint64{}
+	for _, ep := range eps {
+		db.Episodes[ep.ID] = &ep
+		s.EpisodeIDs = append(s.EpisodeIDs, ep.ID)
+	}
 	db.save()
 
 	return nil
