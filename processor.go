@@ -6,8 +6,6 @@ import (
 	"io"
 	"os"
 	"strings"
-
-	"github.com/kr/pretty"
 )
 
 type processor struct {
@@ -28,7 +26,7 @@ func newProcessor() *processor {
 		command{
 			long:  "import",
 			short: "i",
-			desc:  "imports all favorites from thetvdb.com",
+			desc:  "imports all favorite shows from thetvdb.com",
 			fun:   cmdImport,
 		},
 		command{
@@ -68,6 +66,15 @@ func (p *processor) run() {
 	if !configData.hasAuthData() {
 		cmdSetAuth(p, nil)
 	}
+	if err := tvdbEnsureLogin(); err != nil {
+		bye(fmt.Sprintf(pad2+"> something bad happened (%s)\n", err.Error()), 1)
+	}
+	if len(db.Shows) == 0 {
+		fmt.Printf("%s> use command 'import' or 'i' to import all your favorites from thetvdb.com\n\n", pad2)
+	} else {
+		tvdbUpdateAll()
+	}
+
 	for {
 		if err := tvdbEnsureLogin(); err != nil {
 			bye(fmt.Sprintf(pad2+"> something bad happened (%s)\n", err.Error()), 1)
@@ -78,8 +85,7 @@ func (p *processor) run() {
 				if line[0] == cmd.long || line[0] == cmd.short {
 					err := cmd.fun(p, line[1:])
 					if err != nil {
-						pretty.Println(err.Error())
-						//TODO ???
+						fmt.Printf("%s> An error occured while executing command '%s': '%s'\n", pad2, cmd.long, err.Error())
 					}
 					goto COMMAND_EXECUTED
 				}

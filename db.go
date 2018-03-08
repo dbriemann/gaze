@@ -44,6 +44,17 @@ func OpenDB() *database {
 		if finfo.IsDir() {
 			// Path is a directory but should be a file -> exit.
 			bye(fmt.Sprintf("could not open database: %s", ErrDirNotFile.Error()), 1)
+		} else {
+			// Read database file
+			raw, err := ioutil.ReadFile(fpath)
+			if err != nil {
+				bye(fmt.Sprintf("could not open database: %s", err.Error()), 1)
+			}
+
+			err = json.Unmarshal(raw, db)
+			if err != nil {
+				bye(fmt.Sprintf("could not open database: %s", err.Error()), 1)
+			}
 		}
 	}
 
@@ -78,8 +89,12 @@ func (db *database) addShowByID(id uint64) error {
 	return nil
 }
 
+func (db *database) updateShow(s *Show) error {
+	return nil
+}
+
 func (db *database) addEpisodesForShow(s *Show) error {
-	eps, err := tvdbFetchEpisodes(s)
+	eps, err := tvdbFetchAllEpisodes(s)
 	if err != nil {
 		return err
 	}
@@ -102,7 +117,8 @@ type Show struct {
 	FirstAired  string   `json:"firstAired"`
 	Runtime     uint32   `json:"runtime,string"`
 	Overview    string   `json:"overview"`
-	LastUpdated uint64   `json:"lastUpdated"`
+	LastUpdated int64    `json:"lastUpdated"`
+	LastQuery   int64    `json:"lastQuery"`
 	AirDay      string   `json:"airsDayOfWeek"`
 	AirTime     string   `json:"airsTime"`
 	Rating      float32  `json:"siteRating"`

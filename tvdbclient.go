@@ -43,10 +43,11 @@ func tvdbFetchShow(id uint64) (Show, error) {
 
 	// TODO fetch episodes
 	fmt.Printf(" '%s' (id: %d)\n", incoming.Data.Name, incoming.Data.ID)
+	incoming.Data.LastQuery = time.Now().Unix()
 	return incoming.Data, nil
 }
 
-func tvdbFetchEpisodes(s *Show) ([]episode, error) {
+func tvdbFetchAllEpisodes(s *Show) ([]episode, error) {
 	eps := []episode{}
 
 	var incoming struct {
@@ -85,6 +86,7 @@ func tvdbFetchEpisodes(s *Show) ([]episode, error) {
 		}
 	}
 
+	s.LastQuery = time.Now().Unix()
 	fmt.Println(" success")
 
 	return eps, nil
@@ -134,17 +136,72 @@ func tvdbImportFavs() error {
 	}
 	fmt.Printf("%s> added %d shows to database\n\n", pad2, newShows)
 
-	return tvdbUpdateAll()
+	tvdbUpdateAll()
+	return nil
 }
 
-func tvdbUpdateAll() error {
-	// TODO test updates
-	fmt.Printf("%s> updating all shows..", pad2)
-	for _, show := range db.Shows {
-		db.addEpisodesForShow(show)
+func tvdbHasShowUpdates(s *Show) (bool, error) {
+	if time.Now().Unix() <= s.LastQuery+3600 {
+		// Last query for updates is less than an hour ago. Skip to be friendly to servers.
+		return false, nil
 	}
-	db.save()
-	return nil
+	//	fmt.Printf("%s> asking if show '%s' (id: %d) has updates..", pad2, s.Name, s.ID)
+	resp, _, errs := gorequest.New().Head(APIURI+fmt.Sprintf("/series/%d", s.ID)).Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
+	if errs != nil {
+		//		fmt.Println(" failed\n")
+		return false, errs[0]
+	}
+	if resp.StatusCode != http.StatusOK {
+		//		fmt.Println(" failed\n")
+		return false, errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
+	}
+
+	timeStr := resp.Header.Get("Last-Modified")
+	t, err := time.Parse("Mon, 02 Jan 2006 15:04:05 MST", timeStr)
+	if err != nil {
+		//		fmt.Println(" failed\n")
+		return false, err
+	}
+
+	hasUpdates := t.Unix() > s.LastUpdated
+	s.LastQuery = time.Now().Unix()
+
+	//	fmt.Println(hasUpdates)
+
+	if hasUpdates {
+		// Updates are ready to be fetched.
+		return true, nil
+	}
+
+	// Nothing new..
+	return false, nil
+}
+
+func tvdbUpdateAll() {
+
+	//1. find all
+	//2. update all
+	fmt.Printf("%s> querying tvdb.com for updates..", pad2)
+	for _, show := range db.Shows {
+		up, err := tvdbHasShowUpdates(show)
+		// TODO save -> move to db
+		if err != nil {
+			fmt.Print("x")
+			//			fmt.Printf("%s> updating show '%s' (%d) failed.. (error: %s)\n", pad2, show.Name, show.ID, err.Error())
+			continue
+		} else {
+			if up || len(show.EpisodeIDs) == 0 { // Update or first fetch
+				// Update we shall.
+				err = db.addEpisodesForShow(show)
+				if err != nil {
+					//				fmt.Printf("%s> updating show '%s' (%d) failed.. (error: %s)\n", pad2, show.Name, show.ID, err.Error())
+					continue
+				}
+			}
+			fmt.Print(".")
+		}
+	}
+	fmt.Println(" done\n")
 }
 
 func tvdbEnsureLogin() error {
