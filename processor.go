@@ -20,13 +20,13 @@ func newProcessor() *processor {
 		command{
 			long:  "help",
 			short: "h",
-			desc:  "shows the settings and lists all commands",
+			desc:  "lists all commands",
 			fun:   cmdHelp,
 		},
 		command{
 			long:  "import",
 			short: "i",
-			desc:  "imports all favorite shows from thetvdb.com",
+			desc:  "imports favorites from thetvdb.com",
 			fun:   cmdImport,
 		},
 		command{
@@ -38,7 +38,7 @@ func newProcessor() *processor {
 		command{
 			long:  "auth",
 			short: "a",
-			desc:  "queries the user for his auth data and saves it",
+			desc:  "enter and save your auth data",
 			fun:   cmdSetAuth,
 		},
 	}

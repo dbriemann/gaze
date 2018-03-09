@@ -12,11 +12,9 @@ import (
 )
 
 const (
-	APIURI = "https://api.thetvdb.com"
+	APIURI                  = "https://api.thetvdb.com"
+	secondsUntilUpdateCheck = 60 * 60 * 4 // No update checks before 4 hours have passed since last check.
 )
-
-type pagedData struct {
-}
 
 func tvdbFetchShow(id uint64, isUpdate bool) (Show, error) {
 	s := Show{}
@@ -142,7 +140,7 @@ func tvdbFetchFavorites() ([]uint64, error) {
 }
 
 func tvdbHasShowUpdates(s *Show) (bool, error) {
-	if time.Now().Unix() <= s.LastQuery+3600 {
+	if time.Now().Unix() <= s.LastQuery+secondsUntilUpdateCheck {
 		// Last query for updates is less than an hour ago. Skip to be friendly to servers.
 		return false, nil
 	}

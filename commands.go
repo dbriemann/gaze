@@ -14,10 +14,10 @@ type command struct {
 
 func cmdHelp(p *processor, args []string) error {
 	// TODO settings status
-	fmt.Printf("%s> %-10s | %-5s | %s\n", pad2, "command", "short", "description")
-	fmt.Println(pad2 + "----------------------------------------------------------------------")
+	fmt.Printf("%s> command    | description\n", pad2)
+	fmt.Println(pad2 + strings.Repeat("-", 76))
 	for _, cmd := range p.commands {
-		fmt.Printf("%s> %-10s | %-5s | %s\n", pad2, cmd.long, cmd.short, cmd.desc)
+		fmt.Printf("%s> %-10s | %s\n", pad2, fmt.Sprintf("(%s)%s", cmd.short, cmd.long[1:]), cmd.desc)
 	}
 	return nil
 }

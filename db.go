@@ -212,20 +212,7 @@ func (db *database) updateShows(ups []*Show) {
 			continue
 		}
 	}
-}
-
-func (db *database) addEpisodesForShow(s *Show) error {
-	eps, err := tvdbFetchAllEpisodes(s)
-	if err != nil {
-		return err
+	if ups != nil && len(ups) > 0 {
+		fmt.Println("")
 	}
-
-	s.EpisodeIDs = []uint64{}
-	for _, ep := range eps {
-		db.Episodes[ep.ID] = &ep
-		s.EpisodeIDs = append(s.EpisodeIDs, ep.ID)
-	}
-	db.save()
-
-	return nil
 }
