@@ -18,16 +18,23 @@ const (
 type pagedData struct {
 }
 
-func tvdbFetchShow(id uint64) (Show, error) {
+func tvdbFetchShow(id uint64, isUpdate bool) (Show, error) {
 	s := Show{}
-	fmt.Printf("%s> importing show..", pad2)
+	if !isUpdate {
+		fmt.Printf("%s> importing show..", pad2)
+	}
+
 	resp, body, errs := gorequest.New().Get(APIURI+fmt.Sprintf("/series/%d", id)).Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
 	if errs != nil {
-		fmt.Println(" failed\n")
+		if !isUpdate {
+			fmt.Println(" failed\n")
+		}
 		return s, errs[0]
 	}
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println(" failed\n")
+		if !isUpdate {
+			fmt.Println(" failed\n")
+		}
 		return s, errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
 	}
 
@@ -37,13 +44,16 @@ func tvdbFetchShow(id uint64) (Show, error) {
 
 	err := json.Unmarshal([]byte(body), &incoming)
 	if err != nil {
-		fmt.Println(" failed\n")
+		if !isUpdate {
+			fmt.Println(" failed\n")
+		}
 		return s, err
 	}
 
-	// TODO fetch episodes
-	fmt.Printf(" '%s' (id: %d)\n", incoming.Data.Name, incoming.Data.ID)
-	incoming.Data.LastQuery = time.Now().Unix()
+	if !isUpdate {
+		fmt.Printf(" '%s' (id: %d)\n", incoming.Data.Name, incoming.Data.ID)
+	}
+	//	incoming.Data.LastQuery = time.Now().Unix()
 	return incoming.Data, nil
 }
 
@@ -54,8 +64,6 @@ func tvdbFetchAllEpisodes(s *Show) ([]episode, error) {
 		Links struct {
 			First int `json:"first"`
 			Last  int `json:"last"`
-			//			Next  *int `json:"next"`
-			//			Prev  *int `json:"prev"`
 		} `json:"links"`
 		Data []episode `json:"data"`
 	}
@@ -86,22 +94,24 @@ func tvdbFetchAllEpisodes(s *Show) ([]episode, error) {
 		}
 	}
 
-	s.LastQuery = time.Now().Unix()
+	//	s.LastQuery = time.Now().Unix()
 	fmt.Println(" success")
 
 	return eps, nil
 }
 
-func tvdbImportFavs() error {
-	fmt.Printf("%s> importing favorites from thetvdb.com..", pad2)
+func tvdbFetchFavorites() ([]uint64, error) {
+	ids := []uint64{}
+
+	fmt.Printf("%s> fetching favorites from thetvdb.com..", pad2)
 	resp, body, errs := gorequest.New().Get(APIURI+"/user/favorites").Set("Authorization", fmt.Sprintf("Bearer %s", configData.Token)).End()
 	if errs != nil {
 		fmt.Println(" failed\n")
-		return errs[0]
+		return ids, errs[0]
 	}
 	if resp.StatusCode != http.StatusOK {
 		fmt.Println(" failed\n")
-		return errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
+		return ids, errors.New("reply from thetvdb.com has wrong status code " + strconv.Itoa(resp.StatusCode))
 	}
 
 	var incoming struct {
@@ -113,31 +123,22 @@ func tvdbImportFavs() error {
 	err := json.Unmarshal([]byte(body), &incoming)
 	if err != nil {
 		fmt.Println(" failed\n")
-		return err
+		return ids, err
 	}
 
 	fmt.Println("")
 
-	// Add shows to database if they do not exist yet
-	newShows := 0
-	fmt.Printf("%s> querying all favorite shows..\n", pad2)
 	for _, strid := range incoming.Data.Favs {
-		iid, err := strid.Int64()
+		id, err := strid.Int64()
 		if err != nil {
 			fmt.Printf("%s> skipping show with ID %s because of error '%s'. ", pad2, strid, err.Error())
 			continue
 		}
-		id := uint64(iid)
-		if err := db.addShowByID(id); err != nil {
-			fmt.Printf("%s> skipping show with ID %s because of error '%s'. ", pad2, strid, err.Error())
-			continue
-		}
-		newShows++
+		ids = append(ids, uint64(id))
 	}
-	fmt.Printf("%s> added %d shows to database\n\n", pad2, newShows)
 
-	tvdbUpdateAll()
-	return nil
+	return ids, nil
+
 }
 
 func tvdbHasShowUpdates(s *Show) (bool, error) {
@@ -175,33 +176,6 @@ func tvdbHasShowUpdates(s *Show) (bool, error) {
 
 	// Nothing new..
 	return false, nil
-}
-
-func tvdbUpdateAll() {
-
-	//1. find all
-	//2. update all
-	fmt.Printf("%s> querying tvdb.com for updates..", pad2)
-	for _, show := range db.Shows {
-		up, err := tvdbHasShowUpdates(show)
-		// TODO save -> move to db
-		if err != nil {
-			fmt.Print("x")
-			//			fmt.Printf("%s> updating show '%s' (%d) failed.. (error: %s)\n", pad2, show.Name, show.ID, err.Error())
-			continue
-		} else {
-			if up || len(show.EpisodeIDs) == 0 { // Update or first fetch
-				// Update we shall.
-				err = db.addEpisodesForShow(show)
-				if err != nil {
-					//				fmt.Printf("%s> updating show '%s' (%d) failed.. (error: %s)\n", pad2, show.Name, show.ID, err.Error())
-					continue
-				}
-			}
-			fmt.Print(".")
-		}
-	}
-	fmt.Println(" done\n")
 }
 
 func tvdbEnsureLogin() error {

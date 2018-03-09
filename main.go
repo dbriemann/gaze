@@ -17,7 +17,9 @@ const (
      \ \_____\  \ \_\ \_\   /\_____\  \ \_____\
       \/_____/   \/_/\/_/   \/_____/   \/_____/
 
-
+    Type command 'help' or 'h' to show all available commands.
+	
+	
 `
 )
 

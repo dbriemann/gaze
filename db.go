@@ -13,10 +13,38 @@ var (
 	db *database
 )
 
+type Show struct {
+	ID          uint64   `json:"id"`
+	Name        string   `json:"seriesName"`
+	Status      string   `json:"status"`
+	Network     string   `json:"network"`
+	FirstAired  string   `json:"firstAired"`
+	Runtime     uint32   `json:"runtime,string"`
+	Overview    string   `json:"overview"`
+	LastUpdated int64    `json:"lastUpdated"`
+	LastQuery   int64    `json:"lastQuery"`
+	AirDay      string   `json:"airsDayOfWeek"`
+	AirTime     string   `json:"airsTime"`
+	Rating      float32  `json:"siteRating"`
+	RatingCount uint32   `json:"siteRatingCount"`
+	EpisodeIDs  []uint64 `json:"episodeIds"`
+}
+
+type episode struct {
+	ID          uint64 `json:"id"`
+	Name        string `json:"episodeName"`
+	Number      uint32 `json:"airedEpisodeNumber"`
+	Season      uint32 `json:"airedSeason"`
+	FirstAired  string `json:"firstAired"`
+	LastUpdated int64  `json:"lastUpdated"`
+	Overview    string `json:"overview"`
+}
+
 type database struct {
 	Shows       map[uint64]*Show    `json:"shows"`
 	Episodes    map[uint64]*episode `json:"episodes"`
-	LastUpdated uint64              `json:"lastUpdated"`
+	Watched     map[uint64]bool     `json:"watched"`
+	LastUpdated int64               `json:"lastUpdated"`
 	Version     uint32              `json:"version"`
 }
 
@@ -24,7 +52,8 @@ func OpenDB() *database {
 	db := &database{
 		Shows:       map[uint64]*Show{},
 		Episodes:    map[uint64]*episode{},
-		LastUpdated: uint64(time.Now().Unix()),
+		Watched:     map[uint64]bool{},
+		LastUpdated: time.Now().Unix(),
 	}
 	fpath := filepath.Join(workDir, dbFile)
 
@@ -78,7 +107,7 @@ func (db *database) save() {
 
 func (db *database) addShowByID(id uint64) error {
 	// Query thetvdb.com for show data
-	s, err := tvdbFetchShow(id)
+	s, err := tvdbFetchShow(id, false)
 	if err != nil {
 		return err
 	}
@@ -89,8 +118,100 @@ func (db *database) addShowByID(id uint64) error {
 	return nil
 }
 
-func (db *database) updateShow(s *Show) error {
+func (db *database) importFavorites() {
+	fmt.Printf("%s> importing all favorite shows..\n", pad2)
+
+	sids, err := tvdbFetchFavorites()
+	if err != nil {
+		fmt.Printf("failed because of: '%s'\n", err.Error())
+		return
+	}
+	fmt.Println("")
+
+	newShows := 0
+	for _, id := range sids {
+		if err := db.addShowByID(id); err != nil {
+			fmt.Printf("%s> skipping show with ID %d because of: '%s'. ", pad2, id, err.Error())
+			continue
+		}
+		newShows++
+	}
+	db.save()
+	fmt.Printf("%s> added %d shows to database\n\n", pad2, newShows)
+
+	ups := []*Show{}
+	for _, s := range db.Shows {
+		ups = append(ups, s)
+	}
+	db.updateShows(ups)
+}
+
+func (db *database) updateAllShows() {
+	ups := []*Show{}
+
+	fmt.Printf("%s> querying tvdb.com for updates..", pad2)
+	// 1. Detect which shows need updating and store them in a slice.
+	for _, show := range db.Shows {
+		hasUp, err := tvdbHasShowUpdates(show)
+		if err != nil {
+			// TODO: err could be logged if there was a log. For now we ignore this.
+			fmt.Print("x")
+		} else {
+			if hasUp {
+				// The show has updated data on the server.
+				// Mark it for updating.
+				ups = append(ups, show)
+			}
+			fmt.Print(".")
+		}
+	}
+	db.save() // Last query time is saved here.
+	fmt.Println(" done\n")
+
+	// 2. Update all shows in the ups slice.
+	db.updateShows(ups)
+}
+
+func (db *database) updateAllEpisodesForShow(s *Show) error {
+	eps, err := tvdbFetchAllEpisodes(s)
+	if err != nil {
+		return err
+	}
+
+	s.EpisodeIDs = []uint64{}
+	for _, ep := range eps {
+		s.EpisodeIDs = append(s.EpisodeIDs, ep.ID)
+		db.Episodes[ep.ID] = &ep
+	}
+
+	db.save()
+
 	return nil
+}
+
+func (db *database) updateShows(ups []*Show) {
+	for _, show := range ups {
+		fmt.Printf("%s> updating show '%s' (id: %d).. ", pad2, show.Name, show.ID)
+		// We just replace the show with the new data,
+		// if the request was succesful.
+		upShow, err := tvdbFetchShow(show.ID, true)
+		if err != nil {
+			// TODO: err could be logged if there was a log. For now we ignore this.
+			fmt.Println(" failed.")
+			continue
+		}
+		fmt.Println(" done.")
+
+		// If ids on thetvdb.com ever change everything will be bad (they should not).
+		db.Shows[show.ID] = &upShow
+
+		// Now we replace the show's episodes.
+		err = db.updateAllEpisodesForShow(&upShow)
+		if err != nil {
+			// TODO: err could be logged if there was a log. For now we ignore this.
+			continue
+		}
+	}
 }
 
 func (db *database) addEpisodesForShow(s *Show) error {
@@ -107,33 +228,4 @@ func (db *database) addEpisodesForShow(s *Show) error {
 	db.save()
 
 	return nil
-}
-
-type Show struct {
-	ID          uint64   `json:"id"`
-	Name        string   `json:"seriesName"`
-	Status      string   `json:"status"`
-	Network     string   `json:"network"`
-	FirstAired  string   `json:"firstAired"`
-	Runtime     uint32   `json:"runtime,string"`
-	Overview    string   `json:"overview"`
-	LastUpdated int64    `json:"lastUpdated"`
-	LastQuery   int64    `json:"lastQuery"`
-	AirDay      string   `json:"airsDayOfWeek"`
-	AirTime     string   `json:"airsTime"`
-	Rating      float32  `json:"siteRating"`
-	RatingCount uint32   `json:"siteRatingCount"`
-	EpisodeIDs  []uint64 `json:"episodeIds"`
-}
-
-type episode struct {
-	ID          uint64 `json:"id"`
-	Name        string `json:"episodeName"`
-	Number      uint32 `json:"airedEpisodeNumber"`
-	Season      uint32 `json:"airedSeason"`
-	FirstAired  string `json:"firstAired"`
-	LastUpdated uint64 `json:"lastUpdated"`
-	Overview    string `json:"overview"`
-
-	Watched bool `json:"watched"`
 }

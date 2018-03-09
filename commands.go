@@ -23,8 +23,8 @@ func cmdHelp(p *processor, args []string) error {
 }
 
 func cmdImport(p *processor, args []string) error {
-	err := tvdbImportFavs()
-	return err
+	db.importFavorites()
+	return nil
 }
 
 func cmdQuit(p *processor, args []string) error {

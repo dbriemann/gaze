@@ -36,8 +36,8 @@ func newProcessor() *processor {
 			fun:   cmdQuit,
 		},
 		command{
-			long:  "setauth",
-			short: "sa",
+			long:  "auth",
+			short: "a",
 			desc:  "queries the user for his auth data and saves it",
 			fun:   cmdSetAuth,
 		},
@@ -72,7 +72,7 @@ func (p *processor) run() {
 	if len(db.Shows) == 0 {
 		fmt.Printf("%s> use command 'import' or 'i' to import all your favorites from thetvdb.com\n\n", pad2)
 	} else {
-		tvdbUpdateAll()
+		db.updateAllShows()
 	}
 
 	for {
