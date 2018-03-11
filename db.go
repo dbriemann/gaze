@@ -202,6 +202,7 @@ func (db *database) updateShows(ups []*Show) {
 		}
 		fmt.Println(" done.")
 
+		upShow.LastQuery = show.LastQuery
 		// If ids on thetvdb.com ever change everything will be bad (they should not).
 		db.Shows[show.ID] = &upShow
 
