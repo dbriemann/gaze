@@ -39,7 +39,19 @@ func newProcessor() *processor {
 			long:  "auth",
 			short: "a",
 			desc:  "enter and save your auth data",
-			fun:   cmdSetAuth,
+			fun:   cmdAuth,
+		},
+		command{
+			long:  "watch",
+			short: "w",
+			desc:  "set shows/episodes watched",
+			fun:   cmdWatch,
+		},
+		command{
+			long:  "upcoming",
+			short: "u",
+			desc:  "shows shortly upcoming episodes ",
+			fun:   cmdUpcoming,
 		},
 	}
 
@@ -64,7 +76,7 @@ func (p *processor) prompt() []string {
 
 func (p *processor) run() {
 	if !configData.hasAuthData() {
-		cmdSetAuth(p, nil)
+		cmdAuth(p, nil)
 	}
 	if err := tvdbEnsureLogin(); err != nil {
 		bye(fmt.Sprintf(pad2+"> something bad happened (%s)\n", err.Error()), 1)

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 type command struct {
@@ -32,7 +33,58 @@ func cmdQuit(p *processor, args []string) error {
 	return nil
 }
 
-func cmdSetAuth(p *processor, args []string) error {
+func cmdUpcoming(p *processor, args []string) error {
+	upcomers := [3][]*episode{}
+	upcomers[0] = []*episode{} // today
+	upcomers[1] = []*episode{} // tomorrow
+	upcomers[2] = []*episode{} // in 2 days
+
+	for _, ep := range db.Episodes {
+		// Parse ep data format
+		epdate, err := time.Parse("2006-01-02", ep.FirstAired)
+		if err != nil {
+			// This should be logged if there was a log.
+			// We ignore errors here. Many episodes that air in the future
+			// have incomplete information, including missing dates.
+		} else {
+		}
+
+		now := time.Now()
+		if epdate.Year() == now.Year() && epdate.Month() == now.Month() {
+			if epdate.Day() == now.Day() {
+				upcomers[0] = append(upcomers[0], ep)
+			} else if epdate.Day() == now.Add(time.Hour*24).Day() {
+				upcomers[1] = append(upcomers[1], ep)
+			} else if epdate.Day() == now.Add(time.Hour*48).Day() {
+				upcomers[2] = append(upcomers[2], ep)
+			}
+		}
+	}
+
+	for i, eps := range upcomers {
+		for _, ep := range eps {
+			fmt.Printf("%s> %d: %dx%d %v\n", pad2, i, ep.Season, ep.Number, ep.Name)
+		}
+	}
+
+	return nil
+}
+
+func cmdWatch(p *processor, args []string) error {
+	// TODO
+	fmt.Printf("%s> select shows/episodes that you have watched\n", pad2)
+	fmt.Printf("%s> seperate multiple selections with space\n", pad2)
+	fmt.Printf("%s(%3d) %50s\n", pad2, 0, "<*> all before today <*>")
+	counter := 1
+	for _, show := range db.Shows {
+		fmt.Printf("%s(%3d) %50s\n", pad2, counter, show.Name)
+		fmt.Println(show.EpisodeIDs)
+		counter++
+	}
+	return nil
+}
+
+func cmdAuth(p *processor, args []string) error {
 	fmt.Printf("\n%s> specify your 'thetvdb.com' data\n\n", pad2)
 START_OVER:
 	if configData.Auth.UserName == "" {

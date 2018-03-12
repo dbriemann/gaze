@@ -55,15 +55,15 @@ func tvdbFetchShow(id uint64, isUpdate bool) (Show, error) {
 	return incoming.Data, nil
 }
 
-func tvdbFetchAllEpisodes(s *Show) ([]episode, error) {
-	eps := []episode{}
+func tvdbFetchAllEpisodes(s *Show) ([]*episode, error) {
+	eps := []*episode{}
 
 	var incoming struct {
 		Links struct {
 			First int `json:"first"`
 			Last  int `json:"last"`
 		} `json:"links"`
-		Data []episode `json:"data"`
+		Data []*episode `json:"data"`
 	}
 
 	fmt.Printf("%s> importing episodes for show '%s'", pad2, s.Name)

@@ -181,7 +181,7 @@ func (db *database) updateAllEpisodesForShow(s *Show) error {
 	s.EpisodeIDs = []uint64{}
 	for _, ep := range eps {
 		s.EpisodeIDs = append(s.EpisodeIDs, ep.ID)
-		db.Episodes[ep.ID] = &ep
+		db.Episodes[ep.ID] = ep
 	}
 
 	db.save()
